@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_background_remover/image_background_remover.dart';
 import 'package:file_saver/file_saver.dart';
+import 'package:file_selector/file_selector.dart';
 
 void main() {
   runApp(const BackgroundRemoverApp());
@@ -146,7 +147,9 @@ class _BackgroundRemoverScreenState extends State<BackgroundRemoverScreen> {
   }
 
   Future<void> _saveImage() async {
+    print('Save button clicked');
     if (_processedImageBytes == null) {
+      print('No processed image bytes');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('No processed image to save')),
@@ -156,19 +159,40 @@ class _BackgroundRemoverScreenState extends State<BackgroundRemoverScreen> {
     }
 
     try {
-      final fileName = 'bg_removed_${DateTime.now().millisecondsSinceEpoch}';
-      await FileSaver.instance.saveFile(
-        name: fileName,
-        bytes: _processedImageBytes!,
-        mimeType: MimeType.png,
+      print('Attempting to save file...');
+      final fileName = 'bg_removed_${DateTime.now().millisecondsSinceEpoch}.png';
+      
+      // Use file_selector to let user choose location
+      final FileSaveLocation? result = await getSaveLocation(
+        suggestedName: fileName,
+        acceptedTypeGroups: [
+          const XTypeGroup(
+            label: 'PNG Image',
+            extensions: ['png'],
+            mimeTypes: ['image/png'],
+          ),
+        ],
       );
+
+      if (result == null) {
+        // User canceled the dialog
+        print('Save canceled by user');
+        return;
+      }
+
+      final String path = result.path;
+      final File file = File(path);
+      await file.writeAsBytes(_processedImageBytes!);
+      
+      print('File saved successfully at path: $path');
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Image saved as $fileName.png')),
+          SnackBar(content: Text('Image saved to $path')),
         );
       }
     } catch (e) {
+      print('Error saving image: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error saving image: $e')),
