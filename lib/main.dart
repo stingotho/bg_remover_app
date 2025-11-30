@@ -160,6 +160,45 @@ class _BackgroundRemoverScreenState extends State<BackgroundRemoverScreen> {
 
     try {
       print('Attempting to save file...');
+      
+      Uint8List bytesToSave = _processedImageBytes!;
+
+      // If background color is not transparent, we need to composite the image
+      if (_backgroundColor != Colors.transparent) {
+        print('Compositing image with background color: $_backgroundColor');
+        final ui.Codec codec = await ui.instantiateImageCodec(_processedImageBytes!);
+        final ui.FrameInfo frameInfo = await codec.getNextFrame();
+        final ui.Image image = frameInfo.image;
+
+        final ui.PictureRecorder recorder = ui.PictureRecorder();
+        final Canvas canvas = Canvas(recorder);
+
+        // Draw background
+        final Paint backgroundPaint = Paint()..color = _backgroundColor;
+        canvas.drawRect(
+          Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+          backgroundPaint,
+        );
+
+        // Draw image
+        canvas.drawImage(image, Offset.zero, Paint());
+
+        final ui.Image compositedImage = await recorder.endRecording().toImage(
+          image.width,
+          image.height,
+        );
+
+        final ByteData? byteData = await compositedImage.toByteData(
+          format: ui.ImageByteFormat.png,
+        );
+
+        if (byteData != null) {
+          bytesToSave = byteData.buffer.asUint8List();
+        } else {
+          print('Failed to convert composited image to bytes');
+        }
+      }
+
       final fileName = 'bg_removed_${DateTime.now().millisecondsSinceEpoch}.png';
       
       // Use file_selector to let user choose location
@@ -182,7 +221,7 @@ class _BackgroundRemoverScreenState extends State<BackgroundRemoverScreen> {
 
       final String path = result.path;
       final File file = File(path);
-      await file.writeAsBytes(_processedImageBytes!);
+      await file.writeAsBytes(bytesToSave);
       
       print('File saved successfully at path: $path');
       
@@ -347,7 +386,7 @@ class _ColorButton extends StatelessWidget {
               boxShadow: [
                 if (color == Colors.white)
                   BoxShadow(
-                    color: Colors.grey.withOpacity(0.5),
+                    color: Colors.grey.withValues(alpha: 0.5),
                     spreadRadius: 1,
                     blurRadius: 3,
                   ),
